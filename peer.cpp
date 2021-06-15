@@ -8,6 +8,13 @@
 #include <vector>
 
 int main(int argc, char** argv) {
+    std::vector<std::string> args(argv + 1, argv + argc);
+    if (args.size() != 1) {
+        std::cerr << "Usage: ./peer [RECEIVER_IP]" << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    std::string priv_rcvr = args.at(0);  // who we send to
     std::vector<char> spMsg(100);
     spMsg.back() = 'e';
 
@@ -21,7 +28,10 @@ int main(int argc, char** argv) {
     // create UDP socket
     sock = socket(AF_INET, SOCK_DGRAM, 0);
     int enable = 1;
-    perror("setsockopt(SO_REUSEADDR) failed");
+    if (sock < 0) {
+        perror("Socket creation failed: ");
+        return EXIT_FAILURE;
+    }
 
     // set default receiver port (will be updated by whatever is detected from
     // received connection)
@@ -40,26 +50,25 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
+    // establish UDP connection with private peer
     while (true) {
-        // send UDP req to private peer
-        std::string priv_rcvr = "135.84.106.98";  // who we send to
-        // std::string priv_rcvr = "98.204.46.99";   // who we send to
-
         // Setting up the sockaddr_in to connect to
         struct sockaddr_in server;
         server.sin_family = AF_INET;
         server.sin_port = htons(rcvr_port);
 
         if (inet_pton(AF_INET, priv_rcvr.c_str(), &server.sin_addr) < 0) {
-            perror("client: inet_pton");
-            return 1;
+            perror("Invalid IP address");
+            return EXIT_FAILURE;
         }
 
         ret = ::sendto(sock, spMsg.data(), spMsg.size(), 0,
                        (struct sockaddr*)&server, sizeof(server));
 
-        if (ret < 0)
-            perror("error ");
+        if (ret < 0) {
+            perror("UDP send failed: ");
+            return EXIT_FAILURE;
+        }
 
         // now wait for a response
         FD_ZERO(&set);
@@ -77,8 +86,7 @@ int main(int argc, char** argv) {
                 std::cout << "Got response (" << ret << " bytes) from "
                           << priv_rcvr << ":" << rcvr_port << std::endl;
                 std::string udpMsg(spMsg.begin(), spMsg.end());
-                std::cout << "Received UDP: %s" << udpMsg;
-                // clientlogic.ProcessResponse(spMsg, addrRemote, addrLocal);
+                std::cout << "Received UDP: " << udpMsg;
 
                 // get peer details
                 char host[NI_MAXHOST];
@@ -96,5 +104,5 @@ int main(int argc, char** argv) {
             std::cout << "No connections received" << std::endl;
         }
     }
-    return 0;
+    return EXIT_SUCCESS;
 }
